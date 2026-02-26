@@ -61,13 +61,13 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
     options.add_argument("--new-window")
     options.add_argument("--disable-web-security") # Disable CORS protections
     
-    if not settings['enable_browser_override']:
-        options.add_argument("--app=" + helper_url)
+    #if not settings['enable_browser_override']:
+    options.add_argument("--app=" + helper_url)
 
     browser = driver_class(service=service, options=options)
     
-    if settings['enable_browser_override']:
-        browser.get(helper_url)
+    #if settings['enable_browser_override']:
+    #    browser.get(helper_url)
 
     return browser
 

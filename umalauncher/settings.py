@@ -351,6 +351,30 @@ class DefaultSettings(se.NewSettings):
                 se.SettingType.INT,
                 hidden=True,
                 max_value=1048576 # 1MB
+            ),
+            "save_msgpack": se.Setting(
+                "Enable msgpack interception",
+                "Allows interception of msgpacks",
+                False,
+                se.SettingType.BOOL
+            ),
+            "msgpack_output_folder": se.Setting(
+                "msgpacks output folder",
+                "Output folder for all caught msgpacks.",
+                '%USERPROFILE%\\Documents',
+                se.SettingType.STRING
+            ),
+            "save_races": se.Setting(
+                "Enable race result saving",
+                "Allows saving of race results.",
+                False,
+                se.SettingType.BOOL
+            ),
+            "saved_races_folder": se.Setting(
+                "Saved races folder",
+                "Folder where all room match results are saved.",
+                '%USERPROFILE%\\Documents',
+                se.SettingType.STRING
             )
         })
         _settings.get("enable_carrotjuicer").name = "Enable CarrotBlender"

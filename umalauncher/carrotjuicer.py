@@ -149,6 +149,41 @@ class CarrotJuicer:
         with open(util.get_relative(out_name), 'w', encoding='utf-8') as f:
             f.write(json.dumps(packet, indent=4, ensure_ascii=False))
 
+    def to_msgpack(self, packet):
+        # output_folder = os.path.join(util.relative_dir, "output/")
+        output_folder = self.threader.settings["msgpack_output_folder"] + "\\output\\"
+        os.makedirs(output_folder, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H_%M_%S_%f")[:-3]
+        output_path = os.path.join(output_folder, timestamp + "_RES.msgpack")
+        with open(output_path, 'wb') as f:
+            f.write(msgpack.packb(packet))
+
+    def save_race_result(self, packet):
+        output_folder = self.threader.settings["saved_races_folder"] + "\\Saved races\\Room match\\"
+        os.makedirs(output_folder, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H_%M_%S_%f")[:-3]
+        output_path = os.path.join(output_folder, timestamp + ".txt")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            # race horse data array
+            f.write(json.dumps(packet["race_horse_data_array"]))
+            # new line
+            f.write("\n")
+            # race scenario
+            f.write(packet["race_scenario"])
+
+    def save_cm_result(self, packet):
+        output_folder = self.threader.settings["saved_races_folder"] + "\\Saved races\\CM\\"
+        os.makedirs(output_folder, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H_%M_%S_%f")[:-3]
+        output_path = os.path.join(output_folder, timestamp + ".txt")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            # race horse data array
+            f.write(json.dumps(packet["race_horse_data_array"]))
+            # new line
+            f.write("\n")
+            # race scenario
+            f.write(packet["room_info"]["race_scenario"])
+
     def open_helper(self):
         if self.should_stop:
             return
@@ -161,6 +196,8 @@ class CarrotJuicer:
         self.browser = horsium.BrowserWindow(self.helper_url, self.threader, rect=start_pos, run_at_launch=setup_helper_page)
 
     def get_browser_reset_position(self):
+        if self.threader.windowmover.window is None:
+            return None
         game_rect, _ = self.threader.windowmover.window.get_rect()
         workspace_rect = self.threader.windowmover.window.get_workspace_rect()
         left_side = abs(workspace_rect[0] - game_rect[0])
@@ -243,6 +280,7 @@ class CarrotJuicer:
             logger.error(f"Race grade not found for program id {self.previous_race_program_id}")
             return "RACE GRADE NOT FOUND"
 
+        # These aren't on Gametora anymore, but keep them around in case they update the page again.
         grade_text = ""
         if race_grade > 300:
             grade_text = "Pre/OP"
@@ -251,9 +289,9 @@ class CarrotJuicer:
         else:
             grade_text = "G1"
         if 'IS_UL_GLOBAL' in os.environ:
-            return [f"{self.EVENT_ID_TO_POS_STRING_GLB[event_id]} ({grade_text})"]
+            return [f"{self.EVENT_ID_TO_POS_STRING_GLB[event_id]} ({grade_text})", f"{self.EVENT_ID_TO_POS_STRING_GLB[event_id]}"]
         else:
-            return [f"{self.EVENT_ID_TO_POS_STRING[event_id]} ({grade_text})"]
+            return [f"{self.EVENT_ID_TO_POS_STRING[event_id]} ({grade_text})", f"{self.EVENT_ID_TO_POS_STRING[event_id]}"]
 
 
     def handle_response(self, message, is_json=False):
@@ -268,7 +306,10 @@ class CarrotJuicer:
         if self.threader.settings["save_packets"]:
             logger.debug("Response:")
             logger.debug(json.dumps(data))
-            self.to_json(data, str(datetime.now()).replace(":", "-") + "_packet_in.json")
+            self.to_json(data, "packet_in.json")
+
+        if self.threader.settings["save_msgpack"]:
+            self.to_msgpack(data)
 
         try:
             if 'data' not in data:
@@ -276,6 +317,12 @@ class CarrotJuicer:
                 return
 
             data = data['data']
+
+            if self.threader.settings["save_races"] and "race_horse_data_array" in data:
+                if "race_scenario" in data:
+                    self.save_race_result(data)
+                if "room_info" in data:
+                    self.save_cm_result(data)
 
             # Detect leaving the initial loading screen
             # if data.get('common_define'):
@@ -290,12 +337,14 @@ class CarrotJuicer:
 
             # Close whatever popup is open
             if self.browser and self.browser.alive():
-                self.browser.execute_script(
-                    # Janky way to get open event popups
-                    """
-                    document.querySelectorAll("div[id^='event-viewer-'] button[class^='sc-'][aria-expanded=true], div[class^='compatibility_result_box_'] button[class^='sc-'][aria-expanded=true]").forEach(e => { e.click()});
-                    """
-                )
+                # Don't close event popups if the response is the choice outcomes
+                if "choice_reward_array" not in data:
+                    self.browser.execute_script(
+                        # Janky way to get open event popups
+                        """
+                        document.querySelectorAll("div[id^='event-viewer-'] button[class^='sc-'][aria-expanded=true], div[class^='compatibility_result_box_'] button[class^='sc-'][aria-expanded=true]").forEach(e => { e.click()});
+                        """
+                    )
                 gametora_close_ad_banner(self.browser)
 
             # Run ended
@@ -447,12 +496,24 @@ class CarrotJuicer:
                     # If character is the trained character
                     if event_data['event_contents_info']['support_card_id'] and event_data['event_contents_info']['support_card_id'] not in supports:
                         # Random support card event
-                        logger.debug("Random support card detected")
+                        logger.info("Random support card detected")
 
                         self.browser.execute_script("""document.getElementById("boxSupportExtra").click();""")
                         self.browser.execute_script(
                             """
-                            var cont = document.getElementById("30021").parentElement.parentElement;
+                            var cont = document.getElementById("30021").parentElement.parentElement.parentElement;
+                            var rSupportsCheckbox = cont.lastChild?.children[1]?.children[1]?.querySelector('input');
+                            var showUpcomingSupportsCheckbox = cont.lastChild?.children[1]?.children[1]?.querySelector('input');
+                            if( rSupportsCheckbox && !rSupportsCheckbox.checked ) {
+                                rSupportsCheckbox.click(); 
+                            }
+                            if( showUpcomingSupportsCheckbox && !showUpcomingSupportsCheckbox.checked ) {
+                                showUpcomingSupportsCheckbox.click(); 
+                            }
+                            """)
+                        self.browser.execute_script(
+                            """
+                            var cont = document.getElementById("30021").parentElement.parentElement.parentElement;
 
                             var ele = document.getElementById(arguments[0].toString());
 
@@ -476,7 +537,7 @@ class CarrotJuicer:
                     event_element = self.determine_event_element(event_titles)
 
                     if not event_element:
-                        logger.info(f"Could not find event on GT page: {event_data['story_id']} : {event_titles}")
+                        logger.info(f"Could not find event on GT page: {event_data['story_id']} - {event_data['event_id']} : {event_titles}")
                     self.browser.execute_script("""
                         if (arguments[0]) {
                             arguments[0].click();
@@ -516,7 +577,7 @@ class CarrotJuicer:
         if self.threader.settings["save_packets"]:
             logger.debug("Request:")
             logger.debug(json.dumps(data))
-            self.to_json(data, str(datetime.now()).replace(":", "-") + "_packet_out.json")
+            self.to_json(data, "packet_out.json")
 
         self.previous_request = data
 

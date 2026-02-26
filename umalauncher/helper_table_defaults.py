@@ -741,6 +741,69 @@ class UnityTrainingCountRow(hte.Row):
         return cells
 
 
+class UnityScoreCountSettings(se.NewSettings):
+    _settings = {
+        "highlight_max": se.Setting(
+            "Highlight max",
+            "Highlights the facility with the most Unity Score.",
+            True,
+            se.SettingType.BOOL
+        ),
+        "highlight_max_color": se.Setting(
+            "Highlight max color",
+            "The color to use to highlight the facility with the most Unity Score.",
+            "#90EE90",
+            se.SettingType.COLOR
+        )
+    }
+
+
+class UnityScoreCountRow(hte.Row):
+    long_name = "Unity Score partner count"
+    short_name = "Unity<br>Score"
+    description = "[Scenario-specific] Shows Unity training score on each facility."
+
+    def __init__(self):
+        super().__init__()
+        self.settings = UnityScoreCountSettings()
+
+    def _generate_cells(self, game_state) -> list[hte.Cell]:
+        if list(game_state.values())[0]['scenario_id'] != 2:
+            return []
+
+        cells = [hte.Cell(self.short_name, title=self.description)]
+
+        def calc_unity_score(command, training) -> float:
+            current_turn = command['turn']
+            wiz_count = 1 if training == "wiz" else 0
+            local_score = 0.0
+
+            if current_turn < 36:
+                local_score = 2.0 * command['unity_trainable_partner_count'] + command['useful_bond'] / 7.0 + command['riko_count'] + command['unity_near_explode_partner_count'] + wiz_count + command['rainbow_count'] + 8.0 * command['spirit_explosion_partner_count']
+            elif current_turn < 48:
+                local_score = 2.0 * command['unity_trainable_partner_count'] + 2.0 * command['useful_bond'] / 7.0 + command['riko_count'] + command['unity_near_explode_partner_count'] + wiz_count + command['rainbow_count'] + 8.0 * command['spirit_explosion_partner_count']
+            elif current_turn < 60:
+                local_score = 2.0 * command['unity_trainable_partner_count'] + 2.0 * command['useful_bond'] / 7.0 + command['riko_count'] + command['unity_near_explode_partner_count'] + 2.0 * command['rainbow_count'] + 2.0 * command['spirit_explosion_partner_count']
+            else:
+                local_score = 2.0 * command['unity_trainable_partner_count'] + 2.0 * command['useful_bond'] / 7.0 + command['riko_count'] + command['unity_near_explode_partner_count'] + 2.0 * command['rainbow_count'] + command['spirit_explosion_partner_count']
+            return round(local_score, 2)
+
+        highest_unity_score_count = max(calc_unity_score(command, key) for key, command in game_state.items())
+
+        for key, command in game_state.items():
+            bold = False
+            color = None
+            local_score = calc_unity_score(command, key)
+            # Max highlight overrides default
+            if self.settings.highlight_max.value and highest_unity_score_count > 0 and local_score == highest_unity_score_count:
+                bold = True
+                color = self.settings.highlight_max_color.value
+
+            cells.append(hte.Cell(local_score, bold=bold, color=color))
+
+        return cells
+
+
 class LArcStarGaugeGainSettings(se.NewSettings):
     _settings = {
         "highlight_max": se.Setting(
@@ -1252,6 +1315,7 @@ class RowTypes(Enum):
     PARTNER_COUNT = PartnerCountRow
     USEFUL_PARTNER_COUNT = UsefulPartnerCountRow
     RAINBOW_COUNT = RainbowCountRow
+    AOHARU_UNITY_SCORE_COUNT = UnityScoreCountRow
     AOHARU_UNITY_PARTNER_COUNT = UnityTrainingCountRow
     GL_TOKENS = GrandLiveTokensDistributionRow
     GL_TOKENS_TOTAL = GrandLiveTotalTokensRow
@@ -1278,6 +1342,7 @@ class DefaultPreset(hte.Preset):
         RowTypes.UAF_SPORT_POINT_GAIN,
         RowTypes.GFF_VEGETABLES,
         RowTypes.RMU_RESEARCH,
+        RowTypes.AOHARU_UNITY_SCORE_COUNT,
         RowTypes.AOHARU_UNITY_PARTNER_COUNT,
         RowTypes.DYI_POINTS_DIST,
         RowTypes.ONSEN_POINTS_DIST,

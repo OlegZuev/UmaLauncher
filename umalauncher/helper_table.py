@@ -331,6 +331,7 @@ class HelperTable():
             bond_gains_useful = [0]
             partner_count = 0
             useful_partner_count = 0
+            riko_count = 0
             for training_partner_id in command.get('training_partner_array', []):
                 partner_count += 1
 
@@ -355,6 +356,11 @@ class HelperTable():
                             len(data['venus_data_set']['venus_spirit_active_effect_info_array']) > 0 and \
                                 data['venus_data_set']['venus_spirit_active_effect_info_array'][0]['chara_id'] == 9042:
                         rainbow_count += 1
+
+                    # Checking if Support card is Riko Kashimoto
+                    if support_id == 30036 or support_id == 10060:
+                        riko_count = 1
+
                 elif training_partner_id > 1000:  # TODO: Maybe 1000 < training_partner_id < 9000
                     useful_partner_count += 1
 
@@ -368,8 +374,17 @@ class HelperTable():
 
             unity_partner_count = 0
             spirit_explosion_partner_count = 0
-            for _ in command.get('guide_event_partner_array', []):
+            unity_trainable_partner_count = 0
+            unity_near_explode_partner_count = 0
+            for partner_id in command.get('guide_event_partner_array', []):
                 unity_partner_count += 1
+                for eval_info in data['team_data_set']['evaluation_info_array']:
+                    if eval_info['target_id'] == partner_id:
+                        if eval_info['soul_event_state'] == 0:
+                            unity_trainable_partner_count += 1
+                        if eval_info['soul_threshold_id'] == 4:
+                            unity_near_explode_partner_count += 1
+
             for _ in command.get('soul_event_partner_array', []):
                 unity_partner_count += 1
                 spirit_explosion_partner_count += 1
@@ -537,6 +552,10 @@ class HelperTable():
                 'onsen_points_gain': onsen_points_gain,
                 'unity_partner_count': unity_partner_count,
                 'spirit_explosion_partner_count': spirit_explosion_partner_count,
+                'unity_trainable_partner_count': unity_trainable_partner_count,
+                'unity_near_explode_partner_count': unity_near_explode_partner_count,
+                'turn': turn,
+                'riko_count': riko_count,
             }
 
         # Simplify everything down to a dict with only the keys we care about.
